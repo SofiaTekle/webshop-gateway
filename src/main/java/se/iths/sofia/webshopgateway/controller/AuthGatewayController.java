@@ -1,23 +1,33 @@
 package se.iths.sofia.webshopgateway.controller;
 
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-import se.iths.sofia.webshopgateway.service.AuthGatewayService;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import se.iths.sofia.webshopgateway.service.GatewayProxyService;
 
 @RestController
-@RequestMapping("/gateway/auth")
-
+@RequestMapping("/gateway")
 public class AuthGatewayController {
-    private final AuthGatewayService authGatewayService;
+    private final GatewayProxyService gatewayProxyService;
 
-    public AuthGatewayController(AuthGatewayService authGatewayService) {
-        this.authGatewayService = authGatewayService;
+    public AuthGatewayController(GatewayProxyService gatewayProxyService) {
+        this.gatewayProxyService = gatewayProxyService;
     }
 
+    @PostMapping("/auth/login")
+    public ResponseEntity<String> login(
+            @RequestBody String requestBody,
+            @RequestHeader(HttpHeaders.CONTENT_TYPE) String contentType) {
 
-//    @PostMapping("/login")
-//    public ResponseEntity<String> login(@RequestBody String requestBody, HttpServletRequest request) {
-//        return authGatewayService.login(requestBody, request.getHeader(HttpHeaders.CONTENT_TYPE));
-//    }
+        return gatewayProxyService.login(requestBody, contentType);
+    }
+
+    @PostMapping("/register")
+    public ResponseEntity<String> register(
+            @RequestBody String requestBody,
+            @RequestHeader(HttpHeaders.CONTENT_TYPE) String contentType) {
+
+        return gatewayProxyService.register(requestBody, contentType);
+    }
 
 }
