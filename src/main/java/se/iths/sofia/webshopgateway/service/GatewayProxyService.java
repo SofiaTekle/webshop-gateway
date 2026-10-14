@@ -45,6 +45,17 @@ public class GatewayProxyService {
         return forwardPost(orderServiceUrl, "/orders", requestBody, authorization, contentType);
     }
 
+    public ResponseEntity<String> createCheckout(
+            String requestBody, String authorization, String contentType) {
+        return forwardPost(
+                orderServiceUrl, "/orders/checkout",
+                requestBody, authorization, contentType);
+    }
+
+    public ResponseEntity<String> getOrder(Long id, String authorization) {
+        return forwardGet(orderServiceUrl, "/orders/" + id, authorization);
+    }
+
     public ResponseEntity<String> removeProduct(String authorization, Long id) {
         return forwardDelete(productServiceUrl, "/products/" + id, authorization);
     }
