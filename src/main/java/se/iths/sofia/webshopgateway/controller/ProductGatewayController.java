@@ -1,6 +1,7 @@
 package se.iths.sofia.webshopgateway.controller;
-import jakarta.servlet.http.HttpServletRequest;
+
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import se.iths.sofia.webshopgateway.service.GatewayProxyService;
@@ -17,27 +18,49 @@ public class ProductGatewayController {
     }
 
     @GetMapping("/products")
-    public ResponseEntity<String> products (HttpServletRequest request){
-        ResponseEntity<String> response = proxyService.products(request.getHeader(HttpHeaders.AUTHORIZATION));
+    public ResponseEntity<String> products(
+            @CookieValue(name = "access_token", required = false)
+            String accessToken) {
 
-        return response;
+        if (accessToken == null || accessToken.isBlank()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        return proxyService.products("Bearer " + accessToken);
     }
+
     @GetMapping("/products/{id}")
-    public ResponseEntity<String> productById(@PathVariable Long id, HttpServletRequest request){
-        ResponseEntity<String> response = proxyService.productById(id, request.getHeader(HttpHeaders.AUTHORIZATION));
-        return response;
-    }
-    @PostMapping("/products")
-    public ResponseEntity<String> addProduct(@RequestBody String requestBody, HttpServletRequest request){
-        ResponseEntity<String> response = proxyService.createProduct(requestBody,
-                request.getHeader(HttpHeaders.AUTHORIZATION),
-                request.getHeader(HttpHeaders.CONTENT_TYPE));
-        return response;
-    }
-    @DeleteMapping("/products/{id}")
-    public ResponseEntity<String> removeProduct(@PathVariable Long id, HttpServletRequest request){
-        ResponseEntity<String> response = proxyService.removeProduct(request.getHeader(HttpHeaders.AUTHORIZATION), id);
+    public ResponseEntity<String> productById(@PathVariable Long id,
+                                              @CookieValue(name = "access_token", required = false)
+                                              String accessToken) {
 
-        return response;
+        if (accessToken == null || accessToken.isBlank()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        return proxyService.productById(id, "Bearer " + accessToken);
+    }
+
+    @PostMapping("/products")
+    public ResponseEntity<String> addProduct(@RequestBody String requestBody,
+                                             @RequestHeader(HttpHeaders.CONTENT_TYPE) String contentType,
+                                             @CookieValue(name = "access_token", required = false)
+                                             String accessToken) {
+
+        if (accessToken == null || accessToken.isBlank()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        return proxyService.createProduct(requestBody, "Bearer " + accessToken, contentType);
+    }
+
+    @DeleteMapping("/products/{id}")
+    public ResponseEntity<String> removeProduct(@PathVariable Long id,
+                                                @CookieValue(name = "access_token", required = false)
+                                                String accessToken) {
+        if (accessToken == null || accessToken.isBlank()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        return proxyService.removeProduct("Bearer " + accessToken, id);
     }
 }
