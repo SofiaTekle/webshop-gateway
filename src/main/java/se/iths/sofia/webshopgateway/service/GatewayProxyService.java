@@ -1,16 +1,22 @@
 package se.iths.sofia.webshopgateway.service;
 
+import com.fasterxml.jackson.core.JacksonException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import se.iths.sofia.webshopgateway.dto.AuthServiceResponse;
+import se.iths.sofia.webshopgateway.dto.LoginResponse;
 
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 
 @Service
 public class GatewayProxyService {
@@ -18,15 +24,22 @@ public class GatewayProxyService {
     private final String productServiceUrl;
     private final String orderServiceUrl;
     private final HttpClient httpClient;
+    private final boolean cookieSecure;
+    private final String cookieSameSite;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public GatewayProxyService(
             @Value("${app.auth-server-url}") String authServerUrl,
             @Value("${app.product-service-url}") String productServiceUrl,
             @Value("${app.order-service-url}") String orderServiceUrl,
+            @Value("${app.cookie.secure:false}") boolean cookieSecure,
+            @Value("${app.cookie.same-site:Lax}") String cookieSameSite,
             HttpClient httpClient) {
         this.authServerUrl = authServerUrl;
         this.productServiceUrl = productServiceUrl;
         this.orderServiceUrl = orderServiceUrl;
+        this.cookieSecure = cookieSecure;
+        this.cookieSameSite = cookieSameSite;
         this.httpClient = httpClient;
     }
 
@@ -64,16 +77,6 @@ public class GatewayProxyService {
         return forwardPost(productServiceUrl, "/products", requestBody, authorization, contentType);
     }
 
-    public ResponseEntity<String> login(String requestBody, String contentType) {
-        return forwardPost(
-                authServerUrl,
-                "/auth/login",
-                requestBody,
-                null,
-                contentType
-        );
-    }
-
     public ResponseEntity<String> register(String requestBody, String contentType) {
         return forwardPost(
                 authServerUrl,
@@ -83,7 +86,6 @@ public class GatewayProxyService {
                 contentType
         );
     }
-
 
     public ResponseEntity<String> forwardGet(String baseUrl, String path, String authorization) {
         HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(baseUrl + path)).GET();
@@ -105,6 +107,28 @@ public class GatewayProxyService {
         return send(builder, authorization);
 
     }
+
+    private ResponseEntity<String> forwardDelete(String baseUrl, String path, String authorization) {
+        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(baseUrl + path)).DELETE();
+
+        return send(builder, authorization);
+    }
+
+    private ResponseEntity<String> forwardPut(
+            String baseUrl,
+            String path,
+            String requestBody,
+            String authorization,
+            String contentType) {
+        HttpRequest.Builder builder =
+                HttpRequest.newBuilder(URI.create(baseUrl + path))
+                        .PUT(HttpRequest.BodyPublishers.ofString(requestBody));
+        if (contentType != null && !contentType.isBlank()) {
+            builder.header(HttpHeaders.CONTENT_TYPE, contentType);
+        }
+        return send(builder, authorization);
+    }
+
 
     private ResponseEntity<String> send(HttpRequest.Builder builder, String authorization) {
         if (authorization != null && !authorization.isBlank()) {
@@ -132,25 +156,98 @@ public class GatewayProxyService {
         }
     }
 
-    private ResponseEntity<String> forwardDelete(String baseUrl, String path, String authorization) {
-        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(baseUrl + path)).DELETE();
+    public ResponseEntity<?> loginWithCookie(
+            String requestBody,
+            String contentType
+    ) {
+        HttpRequest.Builder request = HttpRequest.newBuilder(
+                        URI.create(authServerUrl + "/auth/login")
+                )
+                .header(
+                        HttpHeaders.CONTENT_TYPE,
+                        contentType != null && !contentType.isBlank()
+                                ? contentType
+                                : "application/json"
+                )
+                .POST(HttpRequest.BodyPublishers.ofString(requestBody));
 
-        return send(builder, authorization);
+        return sendLogin(request);
     }
 
-    private ResponseEntity<String> forwardPut(
-            String baseUrl,
-            String path,
-            String requestBody,
-            String authorization,
-            String contentType) {
-        HttpRequest.Builder builder =
-                HttpRequest.newBuilder(URI.create(baseUrl + path))
-                        .PUT(HttpRequest.BodyPublishers.ofString(requestBody));
-        if (contentType != null && !contentType.isBlank()) {
-            builder.header(HttpHeaders.CONTENT_TYPE, contentType);
+    private ResponseEntity<?> sendLogin(HttpRequest.Builder request) {
+        try {
+            HttpResponse<String> response = httpClient.send(
+                    request.build(),
+                    HttpResponse.BodyHandlers.ofString()
+            );
+
+            if (response.statusCode() < 200
+                    || response.statusCode() >= 300) {
+                return ResponseEntity
+                        .status(response.statusCode())
+                        .body(response.body());
+            }
+
+            return createLoginResponse(response.body());
+
+        } catch (IOException | InterruptedException e) {
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+
+            return ResponseEntity
+                    .status(HttpStatus.BAD_GATEWAY)
+                    .body("Gateway could not reach auth service");
         }
-        return send(builder, authorization);
+    }
+
+    private ResponseEntity<?> createLoginResponse(String responseBody) {
+        try {
+            AuthServiceResponse authResponse =
+                    objectMapper.readValue(
+                            responseBody,
+                            AuthServiceResponse.class
+                    );
+
+            ResponseCookie cookie = ResponseCookie
+                    .from("access_token", authResponse.accessToken())
+                    .httpOnly(true)
+                    .secure(cookieSecure)
+                    .sameSite(cookieSameSite)
+                    .path("/")
+                    .maxAge(Duration.ofSeconds(authResponse.expiresIn()))
+                    .build();
+
+            LoginResponse loginResponse = new LoginResponse(
+                    authResponse.expiresIn(),
+                    authResponse.subject(),
+                    authResponse.roles()
+            );
+
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                    .body(loginResponse);
+
+        } catch (JacksonException e) {
+            return ResponseEntity
+                    .status(HttpStatus.BAD_GATEWAY)
+                    .body("Auth service returned an invalid response");
+        }
+    }
+
+    public ResponseEntity<Void> logout() {
+        ResponseCookie cookie = ResponseCookie
+                .from("access_token", "")
+                .httpOnly(true)
+                .secure(cookieSecure)
+                .sameSite(cookieSameSite)
+                .path("/")
+                .maxAge(Duration.ZERO)
+                .build();
+
+        return ResponseEntity.noContent()
+                .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                .build();
     }
 
 

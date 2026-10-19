@@ -15,11 +15,11 @@ public class AuthGatewayController {
     }
 
     @PostMapping("/auth/login")
-    public ResponseEntity<String> login(
+    public ResponseEntity<?> login(
             @RequestBody String requestBody,
             @RequestHeader(HttpHeaders.CONTENT_TYPE) String contentType) {
 
-        return gatewayProxyService.login(requestBody, contentType);
+        return gatewayProxyService.loginWithCookie(requestBody, contentType);
     }
 
     @PostMapping("/register")
@@ -28,6 +28,11 @@ public class AuthGatewayController {
             @RequestHeader(HttpHeaders.CONTENT_TYPE) String contentType) {
 
         return gatewayProxyService.register(requestBody, contentType);
+    }
+
+    @PostMapping("/auth/logout")
+    public ResponseEntity<Void> logout() {
+        return gatewayProxyService.logout();
     }
 
 }
