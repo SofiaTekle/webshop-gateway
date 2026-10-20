@@ -107,6 +107,11 @@ public class GatewayProxyService {
         return send(builder, authorization);
 
     }
+    public ResponseEntity<String> session(String accessToken){
+        return forwardGet(authServerUrl,
+                "/auth/me",
+                "Bearer " + accessToken);
+    }
 
     private ResponseEntity<String> forwardDelete(String baseUrl, String path, String authorization) {
         HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(baseUrl + path)).DELETE();
