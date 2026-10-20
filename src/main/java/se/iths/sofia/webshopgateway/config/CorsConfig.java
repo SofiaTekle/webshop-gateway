@@ -17,7 +17,7 @@ public class CorsConfig implements WebMvcConfigurer {
 
         registration.allowedOrigins(frontendUrl, "http://localhost:5174","http://localhost:5175");
         registration.allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS");
-        registration.allowedHeaders("Content-Type", "Authorization");
+        registration.allowedHeaders("Content-Type", "*");
         registration.allowCredentials(true);
     }
 }
