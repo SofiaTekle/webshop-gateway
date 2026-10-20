@@ -10,7 +10,7 @@
     </parent>
     <groupId>se.iths.sofia</groupId>
     <artifactId>webshop-gateway</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>1.0</version>
     <name>webshop-gateway</name>
     <description>webshop-gateway</description>
     <url/>
