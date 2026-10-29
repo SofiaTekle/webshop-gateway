@@ -18,6 +18,10 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 
+/**
+ * Vidarebefordrar anrop till auth-, product- och order-service.
+ * Hanterar JWT-cookien, medan mikrotjänsterna verifierar token och utför affärslogiken.
+ */
 @Service
 public class GatewayProxyService {
     private final String authServerUrl;
@@ -43,21 +47,69 @@ public class GatewayProxyService {
         this.httpClient = httpClient;
     }
 
+    /**
+     * Hämtar produkterna från product-service endpoint /products
+     *
+     * @param authorization Bearer-token för autentisering hos product-service
+     * @return http-svaret från product-service med statuskod och body
+     */
     public ResponseEntity<String> products(String authorization) {
+    /**
+     * Bygger och skickar ett GET-anrop till den angivna tjänsten.
+     *
+     * @param baseUrl tjänstens grundadress
+     * @param path sökvägen som läggs till efter grundadressen
+     * @param authorization hela Bearer-värdet, eller null om anropet inte behöver token
+     * @return HTTP-svaret med statuskod och body, eller ett felsvar om anropet misslyckas
+     */
         ResponseEntity<String> getResponse = forwardGet(productServiceUrl, "/products", authorization);
 
         return getResponse;
     }
 
+    /**
+     * Hämtar en specifik produkt från product-service med hjälp av ID från endpointen /products/{id}
+     *
+     * @param id  vilken produkt vi hämtar
+     * @param authorization Bearer-token för autentisering hos product-service
+     * @return http-svaret från product-service med statuskod och body
+     */
     public ResponseEntity<String> productById(Long id, String authorization) {
         ResponseEntity<String> getResponse = forwardGet(productServiceUrl, "/products/" + id, authorization);
         return getResponse;
     }
 
+
+    /**
+     * Skickar beställningen till order-service för att skapa en order.
+     *
+     * @param requestBody uppgifterna som skickas vidare som JSON
+     * @param authorization hela Authorization-värdet, inklusive Bearer och token
+     * @param contentType formatet på innehållet, exempelvis application/json
+     * @return HTTP-svaret med statuskod och body, eller ett felsvar om anropet misslyckas
+     */
     public ResponseEntity<String> createOrder(String requestBody, String authorization, String contentType) {
+    /**
+     * Bygger och skickar ett POST-anrop med innehållet och eventuell token.
+     *
+     * @param baseUrl tjänstens grundadress
+     * @param path sökvägen som läggs till efter grundadressen
+     * @param requestBody uppgifterna som skickas vidare som JSON
+     * @param authorization hela Bearer-värdet, eller null om anropet inte behöver token
+     * @param contentType innehållets format, eller null om ingen Content-Type ska sättas
+     * @return HTTP-svaret med statuskod och body, eller ett felsvar om anropet misslyckas
+     */
         return forwardPost(orderServiceUrl, "/orders", requestBody, authorization, contentType);
     }
 
+    /**
+     * Skickar beställningen till order-service för att skapa en order och starta Stripe Checkout.
+     *
+     * @param requestBody uppgifterna som skickas vidare som JSON
+     * @param authorization hela Authorization-värdet, inklusive Bearer och token
+     * @param contentType formatet på innehållet, exempelvis application/json
+     * @return HTTP-svaret med statuskod och body, eller ett felsvar om anropet misslyckas
+     */
     public ResponseEntity<String> createCheckout(
             String requestBody, String authorization, String contentType) {
         return forwardPost(
@@ -65,18 +117,47 @@ public class GatewayProxyService {
                 requestBody, authorization, contentType);
     }
 
+    /**
+     * Hämtar en beställning via ID från order-service.
+     *
+     * @param id beställningens ID
+     * @param authorization hela Authorization-värdet, inklusive Bearer och token
+     * @return HTTP-svaret med statuskod och body, eller ett felsvar om anropet misslyckas
+     */
     public ResponseEntity<String> getOrder(Long id, String authorization) {
         return forwardGet(orderServiceUrl, "/orders/" + id, authorization);
     }
 
+    /**
+     * Vidarebefordrar ett anrop för att radera en produkt i product-service.
+     *
+     * @param authorization hela Authorization-värdet, inklusive Bearer och token
+     * @param id ID för produkten som ska raderas
+     * @return HTTP-svaret med statuskod och body, eller ett felsvar om anropet misslyckas
+     */
     public ResponseEntity<String> removeProduct(String authorization, Long id) {
         return forwardDelete(productServiceUrl, "/products/" + id, authorization);
     }
 
+    /**
+     * Skickar produktuppgifterna till product-service för att skapa en produkt.
+     *
+     * @param requestBody uppgifterna som skickas vidare som JSON
+     * @param authorization hela Authorization-värdet, inklusive Bearer och token
+     * @param contentType formatet på innehållet, exempelvis application/json
+     * @return HTTP-svaret med statuskod och body, eller ett felsvar om anropet misslyckas
+     */
     public ResponseEntity<String> createProduct(String requestBody, String authorization, String contentType) {
         return forwardPost(productServiceUrl, "/products", requestBody, authorization, contentType);
     }
 
+    /**
+     * Skickar registreringsuppgifterna till auth-service utan Bearer-token.
+     *
+     * @param requestBody uppgifterna som skickas vidare som JSON
+     * @param contentType formatet på innehållet, exempelvis application/json
+     * @return HTTP-svaret med statuskod och body, eller ett felsvar om anropet misslyckas
+     */
     public ResponseEntity<String> register(String requestBody, String contentType) {
         return forwardPost(
                 authServerUrl,
@@ -107,18 +188,43 @@ public class GatewayProxyService {
         return send(builder, authorization);
 
     }
+    /**
+     * Skapar en Bearer-header av token och anropar auth-services /auth/me.
+     * Auth-service ansvarar för att verifiera token.
+     *
+     * @param accessToken JWT-token från cookien, utan Bearer-prefix
+     * @return HTTP-svaret med statuskod och body, eller ett felsvar om anropet misslyckas
+     */
     public ResponseEntity<String> session(String accessToken){
         return forwardGet(authServerUrl,
                 "/auth/me",
                 "Bearer " + accessToken);
     }
 
+    /**
+     * Bygger och skickar ett DELETE-anrop till den angivna tjänsten.
+     *
+     * @param baseUrl tjänstens grundadress
+     * @param path sökvägen till resursen
+     * @param authorization hela Authorization-värdet, inklusive Bearer och token
+     * @return HTTP-svaret med statuskod och body, eller ett felsvar om anropet misslyckas
+     */
     private ResponseEntity<String> forwardDelete(String baseUrl, String path, String authorization) {
         HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(baseUrl + path)).DELETE();
 
         return send(builder, authorization);
     }
 
+    /**
+     * Bygger och skickar ett PUT-anrop med innehållet och eventuell token.
+     *
+     * @param baseUrl tjänstens grundadress
+     * @param path sökvägen till resursen
+     * @param requestBody uppgifterna som skickas vidare som JSON
+     * @param authorization hela Authorization-värdet, inklusive Bearer och token
+     * @param contentType formatet på innehållet, exempelvis application/json
+     * @return HTTP-svaret med statuskod och body, eller ett felsvar om anropet misslyckas
+     */
     private ResponseEntity<String> forwardPut(
             String baseUrl,
             String path,
@@ -135,6 +241,14 @@ public class GatewayProxyService {
     }
 
 
+    /**
+     * Skickar HTTP-anropet och vidarebefordrar statuskod, body och eventuell Content-Type.
+     * Återställer trådens avbrottsflagga om anropet avbryts.
+     *
+     * @param builder det förberedda HTTP-anropet
+     * @param authorization hela Bearer-värdet, eller null om token inte ska skickas
+     * @return tjänstens svar, status 502 vid kommunikationsfel eller status 503 om anropet avbryts
+     */
     private ResponseEntity<String> send(HttpRequest.Builder builder, String authorization) {
         if (authorization != null && !authorization.isBlank()) {
             builder.header(HttpHeaders.AUTHORIZATION, authorization);
@@ -161,6 +275,14 @@ public class GatewayProxyService {
         }
     }
 
+    /**
+     * Skickar inloggningsuppgifterna till auth-service.
+     * Vid lyckad inloggning läggs JWT i en HttpOnly-cookie och användaruppgifterna returneras utan token.
+     *
+     * @param requestBody uppgifterna som skickas vidare som JSON
+     * @param contentType innehållets format; application/json används om värdet saknas
+     * @return status 200 med användaruppgifter och Set-Cookie vid lyckad inloggning, annars ett felsvar
+     */
     public ResponseEntity<?> loginWithCookie(
             String requestBody,
             String contentType
@@ -179,6 +301,12 @@ public class GatewayProxyService {
         return sendLogin(request);
     }
 
+    /**
+     * Skickar login-anropet och bygger ett cookiesvar om autentiseringen lyckas.
+     *
+     * @param request det förberedda login-anropet
+     * @return ett login-svar, auth-services felsvar eller status 502 vid kommunikationsfel eller avbrott
+     */
     private ResponseEntity<?> sendLogin(HttpRequest.Builder request) {
         try {
             HttpResponse<String> response = httpClient.send(
@@ -206,6 +334,13 @@ public class GatewayProxyService {
         }
     }
 
+    /**
+     * Läser auth-services svar, placerar token i en HttpOnly-cookie och bygger användarsvaret.
+     * Cookiens Secure och SameSite hämtas från konfigurationen.
+     *
+     * @param responseBody JSON-svaret från auth-service efter lyckad inloggning
+     * @return status 200 med användaruppgifter och cookie, eller status 502 om JSON-svaret inte kan läsas
+     */
     private ResponseEntity<?> createLoginResponse(String responseBody) {
         try {
             AuthServiceResponse authResponse =
@@ -240,6 +375,12 @@ public class GatewayProxyService {
         }
     }
 
+    /**
+     * Ber webbläsaren att radera access_token-cookien genom att sätta dess livslängd till noll.
+     * Detta återkallar inte en redan utfärdad JWT.
+     *
+     * @return status 204 utan body och en Set-Cookie-header som tar bort cookien
+     */
     public ResponseEntity<Void> logout() {
         ResponseCookie cookie = ResponseCookie
                 .from("access_token", "")
