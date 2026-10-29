@@ -6,11 +6,20 @@ import org.springframework.web.servlet.config.annotation.CorsRegistration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
+/**
+ * Ställer in vilka frontend-adresser som får anropa gatewayen från webbläsaren.
+ */
 @Configuration
 public class CorsConfig implements WebMvcConfigurer {
     @Value("${FRONTEND_URL:http://localhost:5173}")
     private String frontendUrl;
 
+    /**
+     * Tillåter konfigurerad frontend-adress och de angivna lokala adresserna.
+     * Aktiverar stöd för anrop med cookies och anger tillåtna metoder och headers.
+     *
+     * @param registry registret där CORS-reglerna läggs till
+     */
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         CorsRegistration registration = registry.addMapping("/**");

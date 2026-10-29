@@ -7,9 +7,18 @@ import io.swagger.v3.oas.models.security.SecurityScheme;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/**
+ * Ställer in gatewayens API-dokumentation i Swagger.
+ */
 @Configuration
 public class OpenApiConfig {
 
+    /**
+     * Anger API-information och beskriver Bearer-autentisering i Swagger.
+     * Detta är dokumentation och utför ingen autentisering.
+     *
+     * @return inställningarna för API-dokumentationen
+     */
     @Bean
     public OpenAPI webshopGatewayOpenAPI() {
         return new OpenAPI()
